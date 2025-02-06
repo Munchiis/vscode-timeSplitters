@@ -14,8 +14,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "timesplitter.helloWorld",
-        "title": "Hello World"
+        "command": "timesplitter.startTracking",
+        "title": "TimeSplitter: Start Tracking"
       }
     ]
   },
