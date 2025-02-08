@@ -12,3 +12,8 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+test/**
+*.md
+!README.md
+!CHANGELOG.md
+!LICENSE.md
