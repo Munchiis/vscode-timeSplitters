@@ -4,10 +4,10 @@
 
 ### Phase 1: Core Infrastructure
 
-- [ ] Set up project structure
-- [ ] Implement Git branch detection
-- [ ] Create basic time tracking logic (active/passive)
-- [ ] Implement local storage system
+- [x] Set up project structure
+- [x] Implement Git branch detection
+- [x] Create basic time tracking logic (active/passive)
+- [x] Implement local storage system
 
 ### Phase 2: UI & Visualization
 
