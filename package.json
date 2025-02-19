@@ -9,13 +9,36 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "workspaceContains:.git",
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
+        "command": "timesplitter.checkBranch",
+        "title": "TimeSplitter: Check Current Branch"
+      },
+      {
         "command": "timesplitter.startTracking",
         "title": "TimeSplitter: Start Tracking"
+      },
+      {
+        "command": "timesplitter.stopTracking",
+        "title": "TimeSplitter: Stop Tracking"
+      },
+      {
+        "command": "timesplitter.openDashboard",
+        "title": "TimeSplitter: Open Dashboard"
+      },
+      {
+        "command": "timesplitter.createBackup",
+        "title": "TimeSplitter: Create Data Backup"
+      },
+      {
+        "command": "timesplitter.restoreBackup",
+        "title": "TimeSplitter: Restore Data from Backup"
       }
     ]
   },
