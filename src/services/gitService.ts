@@ -1,57 +1,46 @@
 import * as vscode from 'vscode';
-import { getCurrentBranch } from './gitCommands';
+import { API, GitExtension } from './git';
 
 export class GitService {
-    private currentBranch: string | null = null;
-    private checkInterval: NodeJS.Timeout | null = null;
-
+    private currentBranch: string | undefined;
+    private gitApi: API | undefined;
     private _onBranchChanged = new vscode.EventEmitter<string>();
     public readonly onBranchChanged = this._onBranchChanged.event;
 
-    constructor() {
-        // When the service starts, check which branch we're on
-        this.detectCurrentBranch();
-        this.checkInterval = setInterval(() => this.detectCurrentBranch(), 30000);
-    }
+    public async init() {
+        // Get Git API and start branch detection
+        const gitExtension = vscode.extensions.getExtension<GitExtension>('vscode.git')?.exports;
+        if (gitExtension?.enabled) {
+            this.gitApi = gitExtension.getAPI(1);
+            await this.detectCurrentBranch();
 
-    // This method finds out which Git branch we're currently on
-    public async detectCurrentBranch(): Promise<void> {
-        try {
-            // Get the root folder of the workspace
-            const workspaceFolders = vscode.workspace.workspaceFolders;
-            if (!workspaceFolders) {
-                // If there's no workspace open, we can't check the branch
-                return;
-            }
-
-            const rootPath = workspaceFolders[0].uri.fsPath;
-
-            // Run the Git command to get the current branch name
-            const branch = await getCurrentBranch(rootPath);
-
-            if (branch !== this.currentBranch) {
-                const oldBranch = this.currentBranch;
-                this.currentBranch = branch;
-
-                // only triggers after init run
-                if (oldBranch !== null) {
-                    this._onBranchChanged.fire(branch);
-                }
-            }
-        } catch (error) {
-            // the folder isn't a Git repo
-            console.error('Error detecting git branch:', error);
+            // Setup interval to check for branch changes (every 5 seconds)
+            setInterval(() => this.detectCurrentBranch(), 5000);
         }
     }
 
-    public getCurrentBranch(): string | null {
+    public async detectCurrentBranch(): Promise<void> {
+        if (!this.gitApi || !this.gitApi.repositories.length) {
+            return;
+        }
+
+        const branch = this.gitApi.repositories[0]?.state?.HEAD?.name;
+
+        if (branch && branch !== this.currentBranch) {
+            const oldBranch = this.currentBranch;
+            this.currentBranch = branch;
+
+            if (oldBranch !== undefined) {
+                this._onBranchChanged.fire(branch);
+            }
+        }
+    }
+
+    get currentBranchName(): string | undefined {
         return this.currentBranch;
     }
 
     public dispose(): void {
-        if (this.checkInterval) {
-            clearInterval(this.checkInterval);
-            this.checkInterval = null;
-        }
+        // Cleanup
     }
 }

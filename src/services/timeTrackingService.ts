@@ -5,88 +5,101 @@ export interface TimeEntry {
     startTime: number;
     endTime: number | null;
     isActive: boolean;
-    type: 'active' | 'passive';
+    type: 'active' | 'inactive';
 }
 
 export class TimeTrackingService {
-
     private timeEntries: TimeEntry[] = [];
     private currentEntry: TimeEntry | null = null;
-    private lastActivity: number = Date.now();
-    private activityTimer: NodeJS.Timeout | null = null;
-    private readonly INACTIVITY_THRESHOLD = 60000; // ~1min
+    private isEditorFocused: boolean = true; // Assume focused on start
 
     constructor() {
-        this.setupActivityDetection();
-    }
-
-    private setupActivityDetection(): void {
-        vscode.workspace.onDidChangeTextDocument(() => {
-            this.registerActivity();
+        // Track window focus state
+        vscode.window.onDidChangeWindowState(e => {
+            console.log(`Window focus changed: ${e.focused}`);
+            if (e.focused !== this.isEditorFocused) {
+                this.isEditorFocused = e.focused;
+                this.handleFocusChange();
+            }
         });
-
-        vscode.window.onDidChangeTextEditorSelection(() => {
-            this.registerActivity();
-        });
-
-        this.activityTimer = setInterval(() => this.checkActivity(), 30000);
     }
 
-    private registerActivity(): void {
-        this.lastActivity = Date.now();
-        if (this.currentEntry && this.currentEntry.type === 'passive') {
-            this.stopTracking();
-            this.startTracking(this.currentEntry.branch, 'active');
-        }
+    private handleFocusChange(): void {
+        if (!this.currentEntry) { return; }
+
+        const currentBranch = this.currentEntry.branch;
+
+        console.log(`Focus change to ${this.isEditorFocused ? 'focused' : 'unfocused'} on branch ${currentBranch}`);
+
+        // Stop the current entry
+        this.stopTracking();
+
+        // Start a new entry with the appropriate type
+        this.startTracking(currentBranch, this.isEditorFocused ? 'active' : 'inactive');
     }
 
-    private checkActivity(): void {
-        const now = Date.now();
-        const timeSinceLastActivity = now - this.lastActivity;
+    public startTracking(branch: string, type: 'active' | 'inactive' = 'active'): void {
+        console.log(`Starting tracking on branch ${branch} (${type})`);
 
-        if (timeSinceLastActivity > this.INACTIVITY_THRESHOLD &&
-            this.currentEntry &&
-            this.currentEntry.type === 'active') {
-            this.stopTracking();
-            this.startTracking(this.currentEntry.branch, 'passive');
-        }
-    }
-
-    public startTracking(branch: string, type: 'active' | 'passive' = 'active'): void {
+        // Stop any current tracking before starting new
         if (this.currentEntry) {
             this.stopTracking();
         }
+
+        // Determine type based on window focus state
+        const actualType = this.isEditorFocused ? 'active' : 'inactive';
 
         this.currentEntry = {
             branch,
             startTime: Date.now(),
             endTime: null,
             isActive: true,
-            type
+            type: actualType // Use actual focus state
         };
+
+        console.log(`Started tracking at ${new Date(this.currentEntry.startTime).toISOString()}`);
     }
 
     public stopTracking(): void {
         if (this.currentEntry) {
-            this.currentEntry.endTime = Date.now();
+            const now = Date.now();
+            this.currentEntry.endTime = now;
             this.currentEntry.isActive = false;
-            this.timeEntries.push(this.currentEntry);
+
+            const duration = (now - this.currentEntry.startTime) / 1000;
+            console.log(`Stopped tracking, duration: ${duration.toFixed(2)}s (${this.currentEntry.type})`);
+
+            // Only add if duration is meaningful
+            if (duration > 0) {
+                this.timeEntries.push({ ...this.currentEntry }); // Store a copy
+            } else {
+                console.warn('Skipping entry with zero duration');
+            }
+
             this.currentEntry = null;
         }
     }
 
     public getCurrentEntry(): TimeEntry | null {
-        return this.currentEntry;
+        if (!this.currentEntry) { return null; }
+
+        // Return a copy with updated endTime for accurate duration calculation
+        return {
+            ...this.currentEntry,
+            endTime: null, // Keep as null to indicate it's still active
+            startTime: this.currentEntry.startTime,
+            isActive: true
+        };
     }
 
     public getTimeEntries(): TimeEntry[] {
-        return [...this.timeEntries];
+        return JSON.parse(JSON.stringify(this.timeEntries)); // Deep copy
     }
 
     public dispose(): void {
-        if (this.activityTimer) {
-            clearInterval(this.activityTimer);
-            this.activityTimer = null;
+        // Auto-stop on dispose
+        if (this.currentEntry) {
+            this.stopTracking();
         }
     }
 }
