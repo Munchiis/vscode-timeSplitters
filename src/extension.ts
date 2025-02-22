@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
 import { GitService } from './services/gitService';
-import { TimeTrackingService, TimeEntry } from './services/timeTrackingService';
+import { TimeTrackingService } from './services/timeTrackingService';
 import { StorageService } from './services/storageService';
 import { WebviewProvider } from './webview/webviewProvider';
+import { StatusBarService } from './services/statusBarService';
 
 export async function activate(context: vscode.ExtensionContext) {
 	console.log('TimeSplitter is now active!');
@@ -10,14 +11,15 @@ export async function activate(context: vscode.ExtensionContext) {
 	const gitService = new GitService();
 	const storageService = new StorageService(context);
 	const timeTrackingService = new TimeTrackingService();
-	const webviewProvider = new WebviewProvider();
+	const webviewProvider = new WebviewProvider(context.extensionPath);
+	const statusBarService = new StatusBarService();
 
 	let webviewRefreshTimer: NodeJS.Timeout | undefined;
 
 	await gitService.init();
 
 	// Auto-start tracking on the current branch
-	autoStartTracking();
+	setTimeout(() => autoStartTracking(), 5000);
 
 	// Auto-handle branch changes
 	gitService.onBranchChanged(branch => {
@@ -38,6 +40,18 @@ export async function activate(context: vscode.ExtensionContext) {
 
 		// Start tracking on new branch
 		timeTrackingService.startTracking(branch);
+		statusBarService.startTracking(branch, 'active');
+
+		// Update webview if open
+		updateWebviewIfOpen();
+	});
+
+	// Watch for focus changes in the editor
+	vscode.window.onDidChangeWindowState(e => {
+		const currentEntry = timeTrackingService.getCurrentEntry();
+		if (currentEntry) {
+			statusBarService.updateTrackingType(e.focused ? 'active' : 'inactive');
+		}
 	});
 
 	// Register dashboard command
@@ -56,6 +70,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand('timesplitter.stopTracking', () => {
 			if (timeTrackingService.getCurrentEntry()) {
 				timeTrackingService.stopTracking();
+				statusBarService.stopTracking();
 
 				// Save entries
 				const entries = timeTrackingService.getTimeEntries();
@@ -74,6 +89,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			const currentBranch = gitService.currentBranchName;
 			if (currentBranch) {
 				timeTrackingService.startTracking(currentBranch);
+				statusBarService.startTracking(currentBranch, 'active');
 				vscode.window.showInformationMessage(`Started tracking time on branch: ${currentBranch}`);
 			} else {
 				vscode.window.showWarningMessage('No Git branch detected. Please open a Git repository.');
@@ -81,6 +97,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
+	// Setup webview refresh timer
 	function setupWebviewRefresh() {
 		// Clear any existing timer
 		if (webviewRefreshTimer) {
@@ -93,13 +110,15 @@ export async function activate(context: vscode.ExtensionContext) {
 		}, 5000);
 	}
 
+	// Update webview data if it's open
 	function updateWebviewIfOpen() {
 		// Get all entries including the active one
 		const allEntries = getAllEntries();
 		webviewProvider.updateEntries(allEntries);
 	}
 
-	function getAllEntries(): TimeEntry[] {
+	// Get all time entries from both storage and current tracking session
+	function getAllEntries() {
 		const storedEntries = storageService.getTimeEntries();
 		const serviceEntries = timeTrackingService.getTimeEntries();
 		const currentEntry = timeTrackingService.getCurrentEntry();
@@ -111,50 +130,53 @@ export async function activate(context: vscode.ExtensionContext) {
 
 		// Add the current entry if active
 		if (currentEntry) {
-			// Create a copy with current time for accurate duration
-			const updatedCurrentEntry = {
-				...currentEntry,
-				// We'll let the webview calculate end time
-			};
-
-			allEntries.push(updatedCurrentEntry);
+			allEntries.push(currentEntry);
 		}
 
 		return allEntries;
 	}
 
+	// Show the dashboard webview
 	function showDashboard() {
 		const allEntries = getAllEntries();
 		webviewProvider.showWebview(allEntries);
 	}
 
-	// Save data on extension deactivation
-	context.subscriptions.push({
-		dispose: () => {
-			// Stop any active tracking
-			if (timeTrackingService.getCurrentEntry()) {
-				timeTrackingService.stopTracking();
-			}
-
-			// Save all unsaved entries to storage
-			const entries = timeTrackingService.getTimeEntries();
-			entries.forEach(entry => storageService.addTimeEntry(entry));
-
-			// Clear refresh timer
-			if (webviewRefreshTimer) {
-				clearInterval(webviewRefreshTimer);
-			}
-		}
-	});
-
+	// Auto-start tracking when extension activates
 	function autoStartTracking() {
 		const currentBranch = gitService.currentBranchName;
 		if (currentBranch) {
-			// Start with the appropriate type based on window focus state
 			timeTrackingService.startTracking(currentBranch);
+			statusBarService.startTracking(currentBranch, 'active');
 			console.log(`Auto-started tracking on branch: ${currentBranch}`);
+		} else {
+			console.log('No branch detected for auto-start tracking');
 		}
 	}
+
+	// Add all services to be disposed when extension deactivates
+	context.subscriptions.push(
+		vscode.Disposable.from(gitService),
+		vscode.Disposable.from(timeTrackingService),
+		vscode.Disposable.from(statusBarService),
+		{
+			dispose: () => {
+				// Stop any active tracking
+				if (timeTrackingService.getCurrentEntry()) {
+					timeTrackingService.stopTracking();
+				}
+
+				// Save all unsaved entries to storage
+				const entries = timeTrackingService.getTimeEntries();
+				entries.forEach(entry => storageService.addTimeEntry(entry));
+
+				// Clear refresh timer
+				if (webviewRefreshTimer) {
+					clearInterval(webviewRefreshTimer);
+				}
+			}
+		}
+	);
 }
 
 export function deactivate() {
