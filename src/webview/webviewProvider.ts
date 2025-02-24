@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { TimeEntry } from '../services/timeTrackingService';
 
 export class WebviewProvider {
@@ -6,6 +8,11 @@ export class WebviewProvider {
   private refreshInterval: NodeJS.Timeout | undefined;
   private currentEntries: TimeEntry[] = [];
   private readonly UPDATE_INTERVAL = 5000; // Update every 5 seconds
+  private readonly extensionPath: string;
+
+  constructor(extensionPath: string) {
+    this.extensionPath = extensionPath;
+  }
 
   public showWebview(timeEntries: TimeEntry[]) {
     // Always update our entries first
@@ -23,7 +30,12 @@ export class WebviewProvider {
       'timeSplitterDashboard',
       'TimeSplitter Dashboard',
       vscode.ViewColumn.One,
-      { enableScripts: true }
+      {
+        enableScripts: true,
+        localResourceRoots: [
+          vscode.Uri.file(path.join(this.extensionPath, 'src', 'webview', 'resources'))
+        ]
+      }
     );
 
     this.updateContent();
@@ -81,194 +93,160 @@ export class WebviewProvider {
       ...metrics
     }));
 
+    // Calculate totals for summary cards
+    const totalActiveTime = metricsArray.reduce((sum, m) => sum + m.active, 0);
+    const totalInactiveTime = metricsArray.reduce((sum, m) => sum + m.inactive, 0);
+    const totalTime = totalActiveTime + totalInactiveTime;
+    const branchCount = metricsArray.length;
+
+    // Find most used branch
+    let mostUsedBranch = { branch: 'None', total: 0 };
+    if (metricsArray.length > 0) {
+      mostUsedBranch = metricsArray.reduce((prev, current) =>
+        (current.total > prev.total) ? current : prev,
+        { branch: 'None', total: 0 }
+      );
+    }
+
     const now = new Date();
 
-    this.panel.webview.html = `
-            <!DOCTYPE html>
-            <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <title>TimeSplitter Dashboard</title>
-                    <style>
-                        body {
-                            font-family: var(--vscode-font-family);
-                            color: var(--vscode-foreground);
-                            background-color: var(--vscode-editor-background);
-                            padding: 20px;
-                        }
-                        h1 {
-                            font-size: 18px;
-                            color: var(--vscode-editor-foreground);
-                        }
-                        table {
-                            width: 100%;
-                            border-collapse: collapse;
-                            margin-top: 20px;
-                        }
-                        th, td {
-                            text-align: left;
-                            padding: 8px;
-                            border-bottom: 1px solid var(--vscode-panel-border);
-                        }
-                        th {
-                            background-color: var(--vscode-editor-lineHighlightBackground);
-                            cursor: pointer;
-                            position: relative;
-                        }
-                        th:hover {
-                            background-color: var(--vscode-list-hoverBackground);
-                        }
-                        th::after {
-                            content: "";
-                            position: absolute;
-                            right: 8px;
-                            top: 50%;
-                            transform: translateY(-50%);
-                        }
-                        th.sort-asc::after {
-                            content: "↑";
-                        }
-                        th.sort-desc::after {
-                            content: "↓";
-                        }
-                        .active { color: var(--vscode-terminal-ansiGreen); }
-                        .inactive { color: var(--vscode-terminal-ansiYellow); }
-                        .total { font-weight: bold; }
-                        .timestamp { font-size: 0.9em; color: var(--vscode-descriptionForeground); }
-                        .refresh-time {
-                            font-size: 0.8em;
-                            color: var(--vscode-descriptionForeground);
-                            text-align: right;
-                            margin-top: 5px;
-                        }
-                        .auto-update {
-                            font-size: 0.8em;
-                            color: var(--vscode-descriptionForeground);
-                            margin-top: 5px;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <h1>TimeSplitter Dashboard</h1>
-                    <div class="refresh-time">Last updated: ${now.toLocaleTimeString()}</div>
-                    <div class="auto-update">Auto-updating every 5 seconds</div>
+    // Get the HTML template
+    const htmlTemplate = this.getHtmlTemplate();
 
-                    <table id="branchTable">
-                        <thead>
-                            <tr>
-                                <th data-sort="branch">Branch</th>
-                                <th data-sort="active" data-type="number">Active Time</th>
-                                <th data-sort="inactive" data-type="number">Inactive Time</th>
-                                <th data-sort="total" data-type="number">Total Time</th>
-                                <th data-sort="firstSeen" data-type="date">First Seen</th>
-                                <th data-sort="lastSeen" data-type="date" class="sort-desc">Last Accessed</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${metricsArray.map(metric => `
-                                <tr data-branch="${metric.branch}">
-                                    <td>${metric.branch}</td>
-                                    <td class="active" data-value="${metric.active}">${this.formatTimeDetailed(metric.active)}</td>
-                                    <td class="inactive" data-value="${metric.inactive}">${this.formatTimeDetailed(metric.inactive)}</td>
-                                    <td class="total" data-value="${metric.total}">${this.formatTimeDetailed(metric.total)}</td>
-                                    <td class="timestamp" data-value="${metric.firstSeen}">${new Date(metric.firstSeen).toLocaleString()}</td>
-                                    <td class="timestamp" data-value="${metric.lastSeen}">${new Date(metric.lastSeen).toLocaleString()}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
+    // Generate the content components
+    const summaryCards = this.generateSummaryCards(totalTime, totalActiveTime, totalInactiveTime, branchCount, mostUsedBranch);
+    const barChart = this.generateBarChart(metricsArray);
+    const tableRows = this.generateTableRows(metricsArray);
 
-                    <script>
-                        (function() {
-                            // Initialize with default sort (most recently accessed)
-                            let currentSort = 'lastSeen';
-                            let currentSortDir = 'desc';
+    // Get webview URIs for resources
+    const cssUri = this.panel.webview.asWebviewUri(
+      vscode.Uri.file(path.join(this.extensionPath, 'src', 'webview', 'resources', 'dashboard.css'))
+    );
 
-                            // Initial sort
-                            sortTable(currentSort, currentSortDir);
+    const jsUri = this.panel.webview.asWebviewUri(
+      vscode.Uri.file(path.join(this.extensionPath, 'src', 'webview', 'resources', 'dashboard.js'))
+    );
 
-                            // Setup sort handlers
-                            document.querySelectorAll('th[data-sort]').forEach(th => {
-                                th.addEventListener('click', () => {
-                                    const sortKey = th.dataset.sort;
+    // Replace placeholders in the HTML template
+    let html = htmlTemplate
+      .replace('{{cssUri}}', cssUri.toString())
+      .replace('{{jsUri}}', jsUri.toString())
+      .replace('{{lastUpdated}}', now.toLocaleTimeString())
+      .replace('{{summaryCards}}', summaryCards)
+      .replace('{{barChart}}', barChart)
+      .replace('{{tableRows}}', tableRows);
 
-                                    // Toggle direction if same column
-                                    if (sortKey === currentSort) {
-                                        currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
-                                    } else {
-                                        currentSort = sortKey;
-                                        currentSortDir = 'asc';
-                                    }
+    // Set the webview HTML
+    this.panel.webview.html = html;
+  }
 
-                                    // Update UI
-                                    document.querySelectorAll('th').forEach(el => {
-                                        el.classList.remove('sort-asc', 'sort-desc');
-                                    });
+  // Read the HTML template file
+  private getHtmlTemplate(): string {
+    try {
+      const templatePath = path.join(this.extensionPath, 'src', 'webview', 'resources', 'dashboard.html');
+      return fs.readFileSync(templatePath, 'utf8');
+    } catch (error) {
+      console.error('Failed to load HTML template:', error);
+      return this.getFallbackHtmlTemplate();
+    }
+  }
 
-                                    th.classList.add(currentSortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+  // Fallback HTML in case the template file can't be loaded
+  private getFallbackHtmlTemplate(): string {
+    return `<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>TimeSplitter Dashboard</title>
+        <style>
+            body { font-family: sans-serif; padding: 20px; }
+            h1 { color: red; }
+        </style>
+    </head>
+    <body>
+        <h1>Error: Failed to load dashboard template</h1>
+        <p>Please check the extension logs for more details.</p>
+    </body>
+    </html>`;
+  }
 
-                                    // Sort the table
-                                    sortTable(currentSort, currentSortDir);
-                                });
-                            });
+  // Generate the summary cards HTML
+  private generateSummaryCards(
+    totalTime: number,
+    totalActiveTime: number,
+    totalInactiveTime: number,
+    branchCount: number,
+    mostUsedBranch: any
+  ): string {
+    return `
+        <div class="card">
+            <h3 class="card-title">Total Tracking Time</h3>
+            <p class="card-value">${this.formatTimeDetailed(totalTime)}</p>
+            <p class="card-subvalue">Active: ${this.formatTimeDetailed(totalActiveTime)} | Inactive: ${this.formatTimeDetailed(totalInactiveTime)}</p>
+        </div>
 
-                            function sortTable(sortKey, direction) {
-                                const table = document.getElementById('branchTable');
-                                const tbody = table.querySelector('tbody');
-                                const rows = Array.from(tbody.querySelectorAll('tr'));
+        <div class="card">
+            <h3 class="card-title">Branches Tracked</h3>
+            <p class="card-value">${branchCount}</p>
+            <p class="card-subvalue">Most used: ${mostUsedBranch.branch}</p>
+        </div>
 
-                                // Get data type
-                                const dataType = document.querySelector(\`th[data-sort="\${sortKey}"]\`).dataset.type || 'string';
+        <div class="card">
+            <h3 class="card-title">Most Used Branch</h3>
+            <p class="card-value">${mostUsedBranch.branch}</p>
+            <p class="card-subvalue">${this.formatTimeDetailed(mostUsedBranch.total)}</p>
+        </div>
+    `;
+  }
 
-                                // Sort rows
-                                rows.sort((a, b) => {
-                                    let aValue, bValue;
+  // Generate HTML for the bar chart
+  private generateBarChart(metrics: any[]): string {
+    // Sort by total time descending
+    const sortedMetrics = [...metrics].sort((a, b) => b.total - a.total);
 
-                                    if (sortKey === 'branch') {
-                                        aValue = a.dataset.branch;
-                                        bValue = b.dataset.branch;
-                                    } else {
-                                        const aCell = a.querySelector(\`td[data-value]:nth-child(\${getColumnIndex(sortKey) + 1})\`);
-                                        const bCell = b.querySelector(\`td[data-value]:nth-child(\${getColumnIndex(sortKey) + 1})\`);
+    // Take top 8 branches for visibility
+    const topBranches = sortedMetrics.slice(0, 8);
 
-                                        aValue = aCell ? aCell.dataset.value : null;
-                                        bValue = bCell ? bCell.dataset.value : null;
+    return topBranches.map(metric => {
+      // For each branch, we'll make the bar take full width (100%)
+      // and divide that width based on the active/inactive ratio
 
-                                        if (dataType === 'number') {
-                                            aValue = parseFloat(aValue);
-                                            bValue = parseFloat(bValue);
-                                        } else if (dataType === 'date') {
-                                            aValue = new Date(parseFloat(aValue)).getTime();
-                                            bValue = new Date(parseFloat(bValue)).getTime();
-                                        }
-                                    }
+      // Calculate the ratio of active vs inactive time
+      const total = metric.active + metric.inactive;
 
-                                    // Compare values based on direction
-                                    const result = aValue > bValue ? 1 : aValue < bValue ? -1 : 0;
-                                    return direction === 'asc' ? result : -result;
-                                });
+      // Calculate percentages for active and inactive
+      // These will always add up to 100% for each bar
+      const activePercent = total > 0 ? (metric.active / total) * 100 : 0;
+      const inactivePercent = 100 - activePercent; // Ensure they sum to 100%
 
-                                // Reorder the rows
-                                rows.forEach(row => tbody.appendChild(row));
-                            }
-
-                            function getColumnIndex(columnName) {
-                                const headers = Array.from(document.querySelectorAll('th[data-sort]'));
-                                return headers.findIndex(th => th.dataset.sort === columnName);
-                            }
-
-                            // Auto-refresh via client-side timer backup
-                            setInterval(() => {
-                                const vscodeApi = acquireVsCodeApi();
-                                vscodeApi.postMessage({
-                                    type: 'refresh'
-                                });
-                            }, 5000);
-                        })();
-                    </script>
-                </body>
-            </html>
+      return `
+            <div class="bar-group">
+                <div class="bar-label" title="${metric.branch}">${metric.branch}</div>
+                <div class="bar-container">
+                    <div class="bar bar-active" style="width: ${activePercent}%">
+                        ${activePercent > 10 ? `<span class="bar-text">${this.formatTimeSimple(metric.active)}</span>` : ''}
+                    </div>
+                    <div class="bar bar-inactive" style="width: ${inactivePercent}%; left: ${activePercent}%">
+                        ${inactivePercent > 10 ? `<span class="bar-text">${this.formatTimeSimple(metric.inactive)}</span>` : ''}
+                    </div>
+                </div>
+            </div>
         `;
+    }).join('');
+  }
+
+  // Generate table rows HTML
+  private generateTableRows(metrics: any[]): string {
+    return metrics.map(metric => `
+        <tr data-branch="${metric.branch}">
+            <td>${metric.branch}</td>
+            <td class="active" data-value="${metric.active}">${this.formatTimeDetailed(metric.active)}</td>
+            <td class="inactive" data-value="${metric.inactive}">${this.formatTimeDetailed(metric.inactive)}</td>
+            <td class="total" data-value="${metric.total}">${this.formatTimeDetailed(metric.total)}</td>
+            <td class="timestamp" data-value="${metric.firstSeen}">${new Date(metric.firstSeen).toLocaleString()}</td>
+            <td class="timestamp" data-value="${metric.lastSeen}">${new Date(metric.lastSeen).toLocaleString()}</td>
+        </tr>
+    `).join('');
   }
 
   // Calculate metrics for each branch
@@ -331,6 +309,27 @@ export class WebviewProvider {
     });
 
     return branchMetrics;
+  }
+
+  // Format time for simple display (used in chart)
+  private formatTimeSimple(milliseconds: number): string {
+    // Ensure we have a positive number
+    milliseconds = Math.max(0, milliseconds);
+
+    const seconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) {
+      return `${days}d ${hours % 24}h`;
+    } else if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
   }
 
   // Format time in weeks:days:hours:minutes:seconds

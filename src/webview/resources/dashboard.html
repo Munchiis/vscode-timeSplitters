@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>TimeSplitter Dashboard</title>
+    <link rel="stylesheet" href="{{cssUri}}">
+</head>
+<body>
+    <div class="dashboard">
+        <header>
+            <h1>TimeSplitter Dashboard</h1>
+            <div class="meta">
+                Last updated: {{lastUpdated}}<br>
+                Auto-updating every 5 seconds
+            </div>
+        </header>
+
+        <!-- Summary Cards -->
+        <div class="summary-cards">
+            {{summaryCards}}
+        </div>
+
+        <!-- Charts -->
+        <div class="charts">
+            <div class="chart-container">
+                <h3 class="chart-title">Time Per Branch</h3>
+                <div class="bar-chart">
+                    {{barChart}}
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table -->
+        <table id="branchTable">
+            <thead>
+                <tr>
+                    <th data-sort="branch">Branch</th>
+                    <th data-sort="active" data-type="number">Active Time</th>
+                    <th data-sort="inactive" data-type="number">Inactive Time</th>
+                    <th data-sort="total" data-type="number">Total Time</th>
+                    <th data-sort="firstSeen" data-type="date">First Seen</th>
+                    <th data-sort="lastSeen" data-type="date" class="sort-desc">Last Accessed</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{tableRows}}
+            </tbody>
+        </table>
+    </div>
+
+    <script src="{{jsUri}}"></script>
+</body>
+</html>
