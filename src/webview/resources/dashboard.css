@@ -1,0 +1,161 @@
+body {
+    font-family: var(--vscode-font-family);
+    color: var(--vscode-foreground);
+    background-color: var(--vscode-editor-background);
+    padding: 20px;
+    margin: 0;
+}
+.dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+h1 {
+    font-size: 24px;
+    margin: 0;
+}
+.meta {
+    font-size: 0.8em;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* Summary cards */
+.summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+.card {
+    padding: 16px;
+    border-radius: 4px;
+    background-color: var(--vscode-editor-lineHighlightBackground);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.card-title {
+    font-size: 0.9em;
+    margin: 0 0 8px 0;
+    color: var(--vscode-descriptionForeground);
+}
+.card-value {
+    font-size: 1.4em;
+    font-weight: bold;
+    margin: 0;
+}
+.card-subvalue {
+    font-size: 0.8em;
+    margin: 8px 0 0 0;
+    color: var(--vscode-descriptionForeground);
+}
+
+/* Charts */
+.charts {
+    margin-bottom: 20px;
+    width: 100%;
+}
+.chart-container {
+    background-color: var(--vscode-editor-lineHighlightBackground);
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 20px;
+    width: 100%;
+}
+.chart-title {
+    font-size: 1.1em;
+    margin: 0 0 16px 0;
+}
+.bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+.bar-group {
+    display: flex;
+    height: 30px;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+.bar-label {
+    width: 120px;
+    min-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.bar-container {
+    flex-grow: 1;
+    width: 100%;
+    height: 100%;
+    background-color: var(--vscode-editor-background);
+    position: relative;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.bar {
+    height: 100%;
+    position: absolute;
+    left: 0;
+    top: 0;
+    display: flex;
+    align-items: center;
+    min-width: 2px;
+}
+.bar-active {
+    background-color: var(--vscode-terminal-ansiGreen);
+    opacity: 0.7;
+}
+.bar-inactive {
+    background-color: var(--vscode-terminal-ansiYellow);
+    opacity: 0.7;
+}
+.bar-text {
+    padding: 0 8px;
+    color: var(--vscode-editor-background);
+    font-size: 0.8em;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+/* Table */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+th, td {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+th {
+    background-color: var(--vscode-editor-lineHighlightBackground);
+    cursor: pointer;
+    position: relative;
+}
+th:hover {
+    background-color: var(--vscode-list-hoverBackground);
+}
+th::after {
+    content: "";
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+th.sort-asc::after {
+    content: "↑";
+}
+th.sort-desc::after {
+    content: "↓";
+}
+.active { color: var(--vscode-terminal-ansiGreen); }
+.inactive { color: var(--vscode-terminal-ansiYellow); }
+.total { font-weight: bold; }
+.timestamp { font-size: 0.9em; color: var(--vscode-descriptionForeground); }
