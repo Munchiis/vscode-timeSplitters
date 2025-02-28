@@ -11,24 +11,24 @@
 
 ### Phase 2: UI & Visualization
 
-- [ ] Create webview panel
-- [ ] Design dashboard layout
-- [ ] Implement charts and graphs
-- [ ] Add status bar indicator
+- [x] Create webview panel
+- [x] Design dashboard layout
+- [x] Implement charts and graphs
+- [x] Add status bar indicator
 
 ### Phase 3: User Interaction
 
 - [ ] Add manual time entry adjustment
-- [ ] Implement branch filtering and sorting
-- [ ] Create export functionality
+- [x] Implement branch filtering and sorting
+- [ ] Create export functionality <---Maybe--->
 - [ ] Add settings and configuration
 
 ### Phase 4: Advanced Features
 
-- [ ] Implement focus period detection
-- [ ] Add ticket/task linking
-- [ ] Create Pomodoro-style tracking
-- [ ] Add context switching detection
+- [x] Implement focus period detection
+- [ ] Add ticket/task linking <---Maybe--->
+- [ ] Create Pomodoro-style tracking <---Maybe--->
+- [ ] Add context switching detection <---Maybe--->
 
 ### Phase 5: Polish & Refinement
 

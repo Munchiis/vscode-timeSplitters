@@ -1,4 +1,6 @@
 const esbuild = require("esbuild");
+const fs = require("fs");
+const path = require("path");
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -23,6 +25,47 @@ const esbuildProblemMatcherPlugin = {
 	},
 };
 
+/**
+ * @type {import('esbuild').Plugin}
+ */
+const copyWebviewResourcesPlugin = {
+	name: 'copy-webview-resources',
+
+	setup(build) {
+		// Copy webview resources after each build
+		build.onEnd(async () => {
+			const srcDir = path.join(__dirname, 'src', 'webview', 'resources');
+			const destDir = path.join(__dirname, 'dist', 'src', 'webview', 'resources');
+
+			// Ensure destination directory exists
+			if (!fs.existsSync(destDir)) {
+				fs.mkdirSync(destDir, { recursive: true });
+			}
+
+			try {
+				// Read all files in the source directory
+				const files = fs.readdirSync(srcDir);
+
+				// Copy each file to the destination
+				for (const file of files) {
+					const srcPath = path.join(srcDir, file);
+					const destPath = path.join(destDir, file);
+
+					// Only copy files, not directories
+					if (fs.statSync(srcPath).isFile()) {
+						fs.copyFileSync(srcPath, destPath);
+						console.log(`Copied: ${file}`);
+					}
+				}
+
+				console.log('Webview resources copied successfully');
+			} catch (error) {
+				console.error('Error copying webview resources:', error);
+			}
+		});
+	}
+};
+
 async function main() {
 	const ctx = await esbuild.context({
 		entryPoints: [
@@ -38,8 +81,9 @@ async function main() {
 		external: ['vscode'],
 		logLevel: 'silent',
 		plugins: [
-			/* add to the end of plugins array */
+			/* custom plugins */
 			esbuildProblemMatcherPlugin,
+			copyWebviewResourcesPlugin,
 		],
 	});
 	if (watch) {
