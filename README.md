@@ -2,6 +2,9 @@
 
 TimeSplitter is a VS Code extension that helps developers track and visualize time spent on different Git branches, providing insights into work patterns and improving time management.
 
+![image](https://github.com/user-attachments/assets/7528806f-5299-4c9c-90c3-49d2fb43caf8)
+
+
 ## Features
 
 - **Time Tracking**: Automatically tracks time spent on different Git branches
